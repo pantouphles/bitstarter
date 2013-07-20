@@ -24,8 +24,11 @@ References:
 var fs = require('fs');
 var program = require('commander');
 var cheerio = require('cheerio');
+var rest = require("restler");
 var HTMLFILE_DEFAULT = "index.html";
 var CHECKSFILE_DEFAULT = "checks.json";
+var URL_DEFAULT = "https://www.coursera.org/";
+var URL_FILENAME = "url_file.txt";
 
 var assertFileExists = function(infile) {
     var instr = infile.toString();
@@ -66,14 +69,48 @@ var clone = function(fn) {
     return fn.bind({});
 };
 
+var checkArgs = function(program){
+    if (program.file && program.url) {
+	console.error("Warning: have specified both file and url");
+    }
+};
+
+var getUrl = function(url) {
+    rest.get(url).on('complete', function(result, response){
+	if (result instanceof Error) {
+	    console.log("Error: " + response.message);
+	    //this.retry(5000);
+	} else {
+	    fs.writeFileSync(URL_FILENAME, result);
+	}
+    });
+};
+
+var getHtmlFile = function(filename, url) {
+    if (filename) {
+	return filename;
+    } else if (url) {
+	getUrl(url);
+	return URL_FILENAME;
+    } else {
+	//shouldn't get here - throw an error!
+    }
+}
+
 if(require.main == module) {
     program
         .option('-c, --checks <check_file>', 'Path to checks.json', clone(assertFileExists), CHECKSFILE_DEFAULT)
-        .option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists), HTMLFILE_DEFAULT)
+        .option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists))
+	.option('-u, --url <url>', 'URL to page')
         .parse(process.argv);
-    var checkJson = checkHtmlFile(program.file, program.checks);
+
+    checkArgs(program);
+
+    var htmlFile = getHtmlFile(program.file, program.url);
+    var checkJson = checkHtmlFile(htmlFile, program.checks);
     var outJson = JSON.stringify(checkJson, null, 4);
     console.log(outJson);
+
 } else {
     exports.checkHtmlFile = checkHtmlFile;
 }
